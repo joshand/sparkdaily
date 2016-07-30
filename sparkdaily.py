@@ -80,11 +80,11 @@ def getDisplayName(personId):
     return displayName
 
 def getRoomList():
-#	url = "https://api.ciscospark.com/v1/rooms"
-#	
-#	response = requests.request("GET", url, headers=headers)
-#	roominfo = json.loads(response.content)
-	roominfo = {u'items': [{u'created': u'2015-11-30T20:46:32.867Z', u'title': u'Thoughts in the Clouds', u'isLocked': False, u'lastActivity': u'2016-07-28T22:04:24.688Z', u'type': u'group', u'id': u'Y2lzY29zcGFyazovL3VzL1JPT00vNzA5MGNmMzAtOTdhMy0xMWU1LWIyNzAtZDM2ZWRmMzJlODMz'}]}
+#	roominfo = {u'items': [{u'created': u'2015-11-30T20:46:32.867Z', u'title': u'Thoughts in the Clouds', u'isLocked': False, u'lastActivity': u'2016-07-28T22:04:24.688Z', u'type': u'group', u'id': u'Y2lzY29zcGFyazovL3VzL1JPT00vNzA5MGNmMzAtOTdhMy0xMWU1LWIyNzAtZDM2ZWRmMzJlODMz'}]}
+	url = "https://api.ciscospark.com/v1/rooms"
+	
+	response = requests.request("GET", url, headers=headers)
+	roominfo = json.loads(response.content.decode('utf8'))
 	rooms = roominfo[u'items']
 
 	return rooms
@@ -97,7 +97,7 @@ def iterateRooms(rooms):
 		#print(arr_rpkid)
 		rpkid = arr_rpkid[-1]
 		rpkid = rpkid[:-1]								#in python3, there is an extra '
-		print(rid,rpkid)
+		#print(rid,rpkid)
 		participants = getParticipantList(rpkid)
 		iterateParticipants(participants,rpkid)
 	return 0
@@ -116,12 +116,13 @@ def iterateParticipants(participants,roomid):
 		pt = participant[u'type']
 		if pt == "PERSON":
 			pe = participant[u'emailAddress']
-			pm = participant[u'roomProperties'][u'lastSeenActivityUUID']
-			pu = bytes("ciscospark://us/MESSAGE/" + pm, "ascii")
-			pi = base64.b64encode(pu).decode("ascii")
-			arrm = findMessageInRoom(roomid,pi)
+			if "roomProperties" in participant:
+				pm = participant[u'roomProperties'][u'lastSeenActivityUUID']
+				pu = bytes("ciscospark://us/MESSAGE/" + pm, "ascii")
+				pi = base64.b64encode(pu).decode("ascii")
+				arrm = findMessageInRoom(roomid,pi)
 			
-			processParticipantAction(pi,pe,arrm)
+				processParticipantAction(pi,pe,arrm)
 	
 	return 0
 
@@ -169,10 +170,11 @@ def processParticipantAction(partid, partemail, unreadmessages):
 	from_zone = tz.gettz('UTC')
 	to_zone = tz.gettz('America/Chicago')
 
-	print(partemail,"::",partid)
+	#print(partemail,"::",partid)
 	#print("::",unreadmessages,"::")
 	#print(type(unreadmessages))
 
+	body = ""
 	if len(unreadmessages) > 0:
 		todaymsg_list = []
 		for messagenum in unreadmessages:
@@ -207,27 +209,33 @@ def processParticipantAction(partid, partemail, unreadmessages):
         	#if date == msgdate:
 			#	todaymsg_list.append(message)
 		body = createEmailBody(todaymsg_list).decode("ascii")
-		print(body)
 
-	print("------------------------------------------\n")
+	if body == "":
+		print(partemail + ": no message")
+	else:
+		print(partemail + ": message")
+		sendEmailMessage(partemail, body)
 
+	#print("------------------------------------------\n")
+
+def sendEmailMessage(msgto, msgbody):
+	sender = config.sender
+	server = config.server
+	server_port = config.server_port
+
+	msg = MIMEMultipart()
+	body = MIMEText(msgbody)
+
+	msg['Subject'] = "Daily Summary"
+	msg['From'] = sender
+	msg['To'] = msgto
+	msg.attach(body)
+
+	#print msg
+
+	smtpObj = smtplib.SMTP(server, server_port)
+	smtpObj.sendmail(msg["From"], msg["To"].split(","), msg.as_string())
 
 iterateRooms(getRoomList())
 #print(rooms)
 
-#sender = config.sender
-#server = config.server
-#server_port = config.server_port
-
-#msg = MIMEMultipart()
-#body = MIMEText(str(createEmailBody(todayMessage())).strip())
-
-#msg['Subject'] = "Daily Summary"
-#msg['From'] = sender
-#msg['To'] = ", ".join(getUsers())
-#msg.attach(body)
-
-##print msg
-
-#smtpObj = smtplib.SMTP(server, server_port)
-#smtpObj.sendmail(msg["From"], msg["To"].split(","), msg.as_string())
